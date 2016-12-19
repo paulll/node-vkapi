@@ -1,0 +1,28 @@
+{
+  "name": "vklib",
+  "version": "1.0.0",
+  "description": "lite vk api library",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulll/vklib.git"
+  },
+  "keywords": [
+    "vk",
+    "api"
+  ],
+  "author": "paulll",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/paulll/vklib/issues"
+  },
+  "homepage": "https://github.com/paulll/vklib#readme",
+  "dependencies": {
+    "bluebird": "^3.4.6",
+    "double-ended-queue": "^2.1.0-0",
+    "req-fast": "^0.2.15"
+  }
+}
