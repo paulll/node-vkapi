@@ -219,11 +219,20 @@ export class API {
 
     for (let retry = 0; retry < retries; ++retry) {
       try {
-        return (await fetch(`https://api.vk.com/method/${method}?${query_string}`)).json();
+        const result = await (await fetch(`https://api.vk.com/method/${method}?access_token=${token}&${query_string}`)).json();
+        if (result.error) {
+          if ([1, 6, 9, 10, 29].includes(result.error.error_code) && retry + 1 != retries) {
+            await Bluebird.delay(1000);
+            continue;
+          }
+          throw result.error;
+        }
+        return result.response;
       } catch (e) {
-        /* no matter, retry */
+        if (retry + 1 == retries) {
+          throw e;
+        }
       }
     }
-    throw { error: 'ETIMEOUT after N retries', error_code: 0 };
   }
 }
