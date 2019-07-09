@@ -4,7 +4,8 @@
   "description": "fast vk api library",
   "main": "lib/vkapi.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "npx jest"
   },
   "repository": {
     "type": "git",
