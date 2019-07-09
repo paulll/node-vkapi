@@ -11,7 +11,13 @@
 - Троттлинг запросов с access_token
 - Использование access_token как fallback при обращении с service_token
 
-### Usage
+### Установка
+```bash
+npm i -S @paulll/vklib
+```
+
+### Пример
+
 ```typescript
 const api = new API({ access_token, service_token });
 const friends = await api.fetch('friends.get', {user_id: 0, fields: 'photo_max'});

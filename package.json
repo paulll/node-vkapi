@@ -1,8 +1,8 @@
 {
-  "name": "vklib",
+  "name": "@paulll/vklib",
   "version": "2.0.0",
   "description": "fast vk api library",
-  "main": "lib/vkapi.ts",
+  "main": "lib/vkapi.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
