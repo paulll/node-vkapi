@@ -1,9 +1,10 @@
 // @ts-ignore
-import Promise from "bluebird";
+import Bluebird from "bluebird";
 import fetch from "node-fetch";
 import PriorityQueue from "fastpriorityqueue";
+import nodeify from "promise-nodeify";
 
-fetch.Promise = Promise;
+fetch.Promise = Bluebird;
 
 /**
  * API Вконтакте
@@ -26,11 +27,18 @@ fetch.Promise = Promise;
  *
  */
 
+type Task = {
+  callback: ((error: any, response: any) => any),
+  priority: number,
+  params: any,
+  method: string
+}
+
 export class API {
   private readonly access_token = '';
   private readonly service_token = '';
-  private readonly service_queue = new PriorityQueue({ comparator: (a, b) => b.priority > a.priority });
-  private readonly private_queue = new PriorityQueue({ comparator: (a, b) => b.priority > a.priority });
+  private readonly service_queue = new PriorityQueue<Task>((a: Task, b: Task) => b.priority > a.priority);
+  private readonly private_queue = new PriorityQueue<Task>((a: Task, b: Task) => b.priority > a.priority);
   private readonly service_workers = new Set<(any)=>void>();
   private private_worker: (false | ((any)=>void)) = false;
 
@@ -42,8 +50,8 @@ export class API {
     for (let i = 0; i < threads; ++i) {
       const worker = (task) => {
         this.service_workers.delete(worker);
-        API.raw_request(task.method, task.params, this.service_token).nodeify((error, result) => {
-          if (this.service_queue.empty()) this.service_workers.add(worker);
+        nodeify(API.raw_request(task.method, task.params, this.service_token), (error, result) => {
+          if (this.service_queue.isEmpty()) this.service_workers.add(worker);
           else worker(this.service_queue.poll());
           task.callback(error, result);
         });
@@ -57,7 +65,7 @@ export class API {
     // with another private token
     const worker = (task) => {
       this.private_worker = false;
-      API.raw_request(task.method, task.params, this.access_token).nodeify((error, result) => {
+      nodeify(API.raw_request(task.method, task.params, this.access_token), (error, result) => {
         // api limits request interval for 1/3s
         setTimeout(() => {
           this.pack_private_queue_into_execute();
@@ -85,8 +93,10 @@ export class API {
    */
   public async fetch(method, params, { priority = 10, limit = Infinity, silent = true, force_private = false }) {
     try {
+      // @ts-ignore: value returned from VK API
       const { items } = await this.enqueue(method, params, { priority, force_private });
       while (items.length < limit) {
+        // @ts-ignore: value returned from VK API
         const next_part = (await this.enqueue(
           method,
           Object.assign(
@@ -96,6 +106,7 @@ export class API {
             params,
           ),
           { priority, force_private },
+        // @ts-ignore
         )).items;
         if (!next_part.length) return items;
         items.push(...next_part);
@@ -114,7 +125,7 @@ export class API {
    * @arg [priority=10] -
    * @arg [force_private=false] -
    */
-  public async enqueue(method, params, { priority = 10, force_private = false }) {
+  public async enqueue(method, params, { priority = 10, force_private = false } = {}): Promise<unknown>{
     // push request into queue, set callback and wrap as promise
     const push_promise = (queue, params) => {
       const promise = new Promise((fulfill, reject) => {
@@ -129,8 +140,8 @@ export class API {
       });
 
       // trigger workers
-      if (this.private_worker) this.private_worker(this.private_queue.poll());
-      if (this.service_workers.size) this.service_workers.keys().next().value(this.service_queue.poll());
+      if (this.private_worker && !this.private_queue.isEmpty()) this.private_worker(this.private_queue.poll());
+      if (this.service_workers.size && !this.service_queue.isEmpty()) this.service_workers.keys().next().value(this.service_queue.poll());
 
       return promise;
     };
@@ -194,18 +205,18 @@ export class API {
       method: 'execute',
       priority: 100,
       params: { code },
-      callback(error, response) {
+      callback: (error, response) => {
         if (error) {
           // todo: if error is only for one request, mark only it
           // todo: else retry with 1/2 of total_weight
           for (let f of calls) {
             f.priority += 89; // next execute() call will be preferred over requests with p<=10
             f.execute_failed = true;
-            this.private_queue.push(f);
+            this.private_queue.add(f);
           }
 
           // trigger worker
-          if (this.private_worker) this.private_worker(this.private_queue.poll());
+          if (this.private_worker && !this.private_queue.isEmpty()) this.private_worker(this.private_queue.poll());
         } else for (let i = 0; i < calls.length; ++i) setTimeout(calls[i].callback, 0, null, response[i]);
       },
     });
