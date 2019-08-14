@@ -41,16 +41,18 @@ export class API {
   private readonly private_queue = new PriorityQueue<Task>((a: Task, b: Task) => b.priority > a.priority);
   private readonly service_workers = new Set<(any)=>void>();
   private private_worker: (false | ((any)=>void)) = false;
+  private readonly debug: boolean;
 
-  constructor({ access_token, service_token, threads = 10 }) {
+  constructor({ access_token, service_token, threads = 10, debug = false }) {
     this.access_token = access_token;
     this.service_token = service_token;
+    this.debug = debug;
 
     // create N workers for unprivileged tasks
     for (let i = 0; i < threads; ++i) {
       const worker = (task) => {
         this.service_workers.delete(worker);
-        nodeify(API.raw_request(task.method, task.params, this.service_token), (error, result) => {
+        nodeify(API.raw_request(task.method, task.params, this.service_token, 7, this.debug), (error, result) => {
           if (this.service_queue.isEmpty()) this.service_workers.add(worker);
           else worker(this.service_queue.poll());
           task.callback(error, result);
@@ -65,7 +67,7 @@ export class API {
     // with another private token
     const worker = (task) => {
       this.private_worker = false;
-      nodeify(API.raw_request(task.method, task.params, this.access_token), (error, result) => {
+      nodeify(API.raw_request(task.method, task.params, this.access_token, 7, this.debug), (error, result) => {
         // api limits request interval for 1/3s
         setTimeout(() => {
           this.pack_private_queue_into_execute();
@@ -176,7 +178,7 @@ export class API {
       if (request.execute_failed) return 101; // 101 means that request would not be packed into execute
       if (request.method === 'friends.get') return request.params.has('fields') ? 101 : 14;
       if (request.method === 'users.get')
-        return 40 + 8 * (request.params.fields && request.params.fields.split(',').length);
+        return 5 + 8 * (request.params.fields ? request.params.fields.split(',').length : 0);
       return 101;
     };
 
@@ -196,15 +198,20 @@ export class API {
 
     for (let f of failed) this.private_queue.add(f);
 
+    if (!calls.length)
+      return;
+    if (calls.length === 1)
+      return this.private_queue.add(calls[0]);
+
     // vkscript code
     const code =
-      'return [' + calls.map((call) => `API.${call.method}({${JSON.stringify(call.params)})`).join(',') + '];';
+      'return [' + calls.map((call) => `API.${call.method}(${JSON.stringify(call.params)})`).join(',') + '];';
 
     // put packed request on top of the queue
     this.private_queue.add({
       method: 'execute',
       priority: 100,
-      params: { code },
+      params: { code, v:5.100 },
       callback: (error, response) => {
         if (error) {
           // todo: if error is only for one request, mark only it
@@ -222,7 +229,7 @@ export class API {
     });
   }
 
-  private static async raw_request(method, params, token, retries = 7) {
+  private static async raw_request(method, params, token, retries = 7, debug=false) {
     // Generate query string for GET request
     const query_string = Object.keys(params)
       .map((key) => `${key}=${encodeURIComponent(params[key])}`)
@@ -230,7 +237,14 @@ export class API {
 
     for (let retry = 0; retry < retries; ++retry) {
       try {
-        const result = await (await fetch(`https://api.vk.com/method/${method}?access_token=${token}&${query_string}`)).json();
+        const url = `https://api.vk.com/method/${method}?access_token=${token}&${query_string}`;
+        if (debug) {
+          console.log(`[vkapi] REQUEST: ${url}`);
+        }
+        const result = await (await fetch(url)).json();
+        if (debug) {
+          console.log(`[vkapi] RESPONSE: `, result);
+        }
         if (result.error) {
           if ([1, 6, 9, 10, 29].includes(result.error.error_code) && retry + 1 != retries) {
             await Bluebird.delay(1000);
