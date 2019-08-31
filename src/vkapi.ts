@@ -1,10 +1,44 @@
 // @ts-ignore
 import Bluebird from "bluebird";
-import fetch from "node-fetch";
 import PriorityQueue from "fastpriorityqueue";
 import nodeify from "promise-nodeify";
 
-fetch.Promise = Bluebird;
+
+/*
+ * Полифилл fetch для работы в браузере
+ */
+
+let fetch = (_) => new Bluebird(_=>_({json: () => 0})),
+    last_rid = 0;
+
+// @ts-ignore
+if (typeof window === 'undefined') {
+  fetch = require('node-fetch');
+
+  // @ts-ignore
+  fetch.Promise = Bluebird;
+} else {
+  const cb = new Map;
+
+  // @ts-ignore
+  window.cb = cb;
+
+  fetch = (url) => {
+    return new Bluebird((fulfill) => {
+      const e = document.createElement('script');
+      const id = ++last_rid;
+      cb.set(id, (data) => ({json: () => data}));
+      e.src = `${url}&callback=cb.get(${id})`;
+      e.onload = () => {
+        cb.delete(id);
+        document.head.removeChild(e);
+      };
+      document.head.appendChild(e);
+    });
+  };
+}
+
+
 
 /**
  * API Вконтакте
@@ -241,6 +275,7 @@ export class API {
         if (debug) {
           console.log(`[vkapi] REQUEST: ${url}`);
         }
+        // @ts-ignore
         const result = await (await fetch(url)).json();
         if (debug) {
           console.log(`[vkapi] RESPONSE: `, result);

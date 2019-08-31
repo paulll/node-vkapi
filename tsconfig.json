@@ -5,7 +5,10 @@
     "sourceMap": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "lib": ["es7"],
+    "lib": [
+      "es7",
+      "dom"
+    ],
     "outDir": "lib",
     "declaration": true
   },
