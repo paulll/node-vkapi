@@ -5,7 +5,7 @@
   "main": "lib/vkapi.js",
   "types": "lib/vkapi.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npx browserify -p tinyify lib/vkapi.js -o lib/vkapi.bundle.js",
     "test": "npx jest"
   },
   "repository": {
@@ -32,7 +32,9 @@
     "@types/bluebird": "^3.5.27",
     "@types/jest": "^24.0.15",
     "@types/node": "^12.6.2",
+    "browserify": "^16.5.0",
     "jest": "^24.8.0",
+    "tinyify": "^2.5.1",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.3"
   },
