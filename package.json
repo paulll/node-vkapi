@@ -31,7 +31,7 @@
   "devDependencies": {
     "@types/bluebird": "^3.5.27",
     "@types/jest": "^24.0.15",
-    "@types/node": "^12.6.2",
+    "@types/node": "^13.1.5",
     "browserify": "^16.5.0",
     "jest": "^24.8.0",
     "tinyify": "^2.5.1",
