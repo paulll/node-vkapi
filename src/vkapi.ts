@@ -1,14 +1,12 @@
-// @ts-ignore
 import Bluebird from "bluebird";
 import PriorityQueue from "fastpriorityqueue";
 import nodeify from "promise-nodeify";
-
 
 /*
  * Полифилл fetch для работы в браузере
  */
 
-let fetch = (_) => new Bluebird(_=>_({json: () => 0})),
+let fetch = (_) => new Promise(_=>_({json: () => 0})),
     last_rid = 0;
 
 // @ts-ignore
@@ -24,15 +22,15 @@ if (typeof window === 'undefined') {
   window.cb = cb;
 
   fetch = (url) => {
-    return new Bluebird((fulfill) => {
+    return new Promise((fulfill) => {
       const e = document.createElement('script');
       const id = ++last_rid;
-      cb.set(id, (data) => ({json: () => data}));
-      e.src = `${url}&callback=cb.get(${id})`;
-      e.onload = () => {
+      cb.set(id, (data) => {
         cb.delete(id);
         document.head.removeChild(e);
-      };
+        fulfill({json: () => data})
+      });
+      e.src = `${url}&callback=cb.get(${id})`;
       document.head.appendChild(e);
     });
   };
@@ -77,6 +75,15 @@ export class API {
   private private_worker: (false | ((any)=>void)) = false;
   private readonly debug: boolean;
 
+  public readonly stats = {
+    requests_public: 0,
+    requests_private: 0,
+    requests: () => this.stats.requests_private + this.stats.requests_public,
+    queue: () => this.service_queue.size + this.private_queue.size,
+    public_queue: () => this.service_queue.size,
+    private_queue: () => this.private_queue.size,
+  };
+
   constructor({ access_token, service_token, threads = 10, debug = false }) {
     this.access_token = access_token;
     this.service_token = service_token;
@@ -87,6 +94,7 @@ export class API {
       const worker = (task) => {
         this.service_workers.delete(worker);
         nodeify(API.raw_request(task.method, task.params, this.service_token, 7, this.debug), (error, result) => {
+          this.stats.requests_public++;
           if (this.service_queue.isEmpty()) this.service_workers.add(worker);
           else worker(this.service_queue.poll());
           task.callback(error, result);
@@ -102,6 +110,7 @@ export class API {
     const worker = (task) => {
       this.private_worker = false;
       nodeify(API.raw_request(task.method, task.params, this.access_token, 7, this.debug), (error, result) => {
+        this.stats.requests_private++;
         // api limits request interval for 1/3s
         setTimeout(() => {
           this.pack_private_queue_into_execute();
@@ -127,10 +136,28 @@ export class API {
    * @arg [silent=true] - Return empty list on error
    * @arg [force_private=false] - Use only private access token
    */
-  public async fetch(method, params, { priority = 10, limit = Infinity, silent = true, force_private = false }) {
+  public async fetch(method, params, { priority = 10, limit = Infinity, silent = true, parallel = false, force_private = false }) {
     try {
       // @ts-ignore: value returned from VK API
-      const { items } = await this.enqueue(method, params, { priority, force_private });
+      const { items, count } = await this.enqueue(method, params, { priority, force_private });
+
+      if (parallel)
+      await Promise.all(Array(Math.ceil((count - items.length)/params.count)).fill(0).map(async (_, i) => {
+        // @ts-ignore
+        const part = (await this.enqueue(
+          method,
+          Object.assign(
+            {
+              offset: items.length + i*params.count,
+            },
+            params,
+          ),
+          { priority, force_private },
+        // @ts-ignore
+        )).items;
+        items.push(...part);
+      }));
+
       while (items.length < limit) {
         // @ts-ignore: value returned from VK API
         const next_part = (await this.enqueue(
@@ -210,7 +237,7 @@ export class API {
     // calculate approx request weight to meet api limits
     const get_weight = (request) => {
       if (request.execute_failed) return 101; // 101 means that request would not be packed into execute
-      if (request.method === 'friends.get') return request.params.has('fields') ? 101 : 14;
+      if (request.method === 'friends.get') return request.params.fields ? 101 : 14;
       if (request.method === 'users.get')
         return 5 + 8 * (request.params.fields ? request.params.fields.split(',').length : 0);
       return 101;
