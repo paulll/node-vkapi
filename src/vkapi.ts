@@ -245,7 +245,7 @@ export class API {
     this.private_queue.add({
       method: 'execute',
       priority: 100,
-      params: { code, v:5.100 },
+      params: { code, v:5.131 },
       callback: (error, response) => {
         if (error) {
           // todo: if error is only for one request, mark only it
