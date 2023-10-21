@@ -1,6 +1,6 @@
 {
   "name": "@paulll/vklib",
-  "version": "2.4.2",
+  "version": "2.4.4",
   "description": "fast vk api library",
   "main": "lib/vkapi.js",
   "types": "lib/vkapi.d.ts",
