@@ -23,7 +23,6 @@
   },
   "homepage": "https://github.com/paulll/node-vkapi#readme",
   "dependencies": {
-    "@paulll/vklib": "link:",
     "bluebird": "^3.4.6",
     "fastpriorityqueue": "latest",
     "node-fetch": "^2.6.0",
